@@ -1,8 +1,6 @@
 
 package com.kyounghyun.iotproject.bluetooth;
 
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -15,18 +13,11 @@ import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
-import android.media.RingtoneManager;
-import android.net.Uri;
 import android.os.Binder;
 import android.os.IBinder;
-import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
-import com.kyounghyun.iotproject.R;
-import com.kyounghyun.iotproject.application.ApplicationController;
 import com.kyounghyun.iotproject.bluetooth.util.GattAttributes;
-import com.kyounghyun.iotproject.database.ItemData;
-import com.kyounghyun.iotproject.main.MainActivity;
 
 import java.util.List;
 import java.util.UUID;
@@ -107,17 +98,15 @@ public class BluetoothLeService extends Service {
                 intentAction = ACTION_GATT_CONNECTED;
                 mConnectionState = STATE_CONNECTED;
                 broadcastUpdate(intentAction);
-                Log.i(TAG, "Connected to GATT server.");
+                Log.i("myTestLog", "Connected to GATT server.");
                 // Attempts to discover services after successful connection.
                 Log.i(TAG, "Attempting to start service discovery:" + mBluetoothGatt.discoverServices());
 
 
-//                mBluetoothGatt.readRemoteRssi();
-
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 intentAction = ACTION_GATT_DISCONNECTED;
                 mConnectionState = STATE_DISCONNECTED;
-                Log.i(TAG, "Disconnected from GATT server.");
+                Log.i("myTestLog", "Disconnected from GATT server.");
                 Log.i("myTag", "Disconnected");
                 broadcastUpdate(intentAction);
             }

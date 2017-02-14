@@ -29,6 +29,11 @@
 
 
         <service
+            android:name=".bluetooth.BluetoothLeService"
+            android:enabled="true"/>
+
+
+        <service
             android:name=".advertising.AdvertiserService"
             android:enabled="true"
             android:exported="false" />

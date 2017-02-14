@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.BroadcastReceiver;
@@ -35,6 +36,8 @@ import com.kyounghyun.iotproject.database.ItemData;
 import com.kyounghyun.iotproject.dialog.DialogConparePinNum;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -58,6 +61,7 @@ public class LockActivity extends AppCompatActivity {
 
     int countUp = 0;
 
+    int totalDeviceSize = 0;
     int connectDeviceMax = 0;
     int connectDeviceCount = 0;
     int unconnectDeviceCount = 0;
@@ -99,11 +103,39 @@ public class LockActivity extends AppCompatActivity {
 
         @Override
         public void onServiceConnected(ComponentName componentName, IBinder service) {
+
+            Log.i("myTestLog","onServiceConnected" );
+
             mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
             if (!mBluetoothLeService.initialize()) {
 //                Log.e(TAG, "Unable to initialize Bluetooth");
 //                finish();
             }
+
+
+            /**
+             * 연결된 기기 갯수 파악
+             */
+
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+
+                    for(int i = 0 ; i< moduleList.size(); i++){
+
+
+                        Log.i("myTestLog","counting attempt : " + moduleList.get(i).identNum);
+
+                        connectBle(moduleList.get(i).identNum);
+
+                    }
+
+                    Log.i("myTag","count_check : " + countCheck);
+
+                }
+            }).start();
+
+
             // Automatically connects to the device upon successful start-up initialization.
 //            mBluetoothLeService.connect(mDeviceAddress);
         }
@@ -122,42 +154,49 @@ public class LockActivity extends AppCompatActivity {
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             String intentAction;
 
+            Log.i("myTestLog"," >>>> onConnectionStateChange");
+
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 intentAction = ACTION_GATT_CONNECTED;
-                Log.i("myTag", "---- Connected ----");
+
+                final BluetoothDevice device = gatt.getDevice();
 
 
                 connectDeviceCount++;
 
-                if(connectDeviceCount >= connectDeviceMax) {
-                    countStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
-                    countStateText.setText("Success");
-                    countCheck = true;
-                }
-
-
-                /**
-                 * 특정 다비아스 연결 확인
-                 */
-
-                BluetoothDevice device = gatt.getDevice();
-                Log.i("myTag","connected Device : " + device.getName());
-
-
-                addLog("Connected Device : " + device.getName());
-
-
-                if(mDbOpenHelper.DbTargetFind(device.getAddress()) != null)
+                if(mDbOpenHelper.DbTargetFind(device.getAddress()) != null) {
                     targetDeviceCount++;
-
-                if(targetDeviceMax == targetDeviceCount) {
-                    targetCheck = true;
-
-                    addLog("타겟 조건 결과 : Success");
-
-                    targetStateText.setText("Success");
-                    targetStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
                 }
+
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        runOnUiThread(new Runnable(){
+                            @Override
+                            public void run() {
+                                addLog("Connected Device : " + device.getName());
+                            }
+                        });
+                    }
+                }).start();
+
+//                Log.i("myTag","connected Device : " + device.getName());
+//
+//
+//                addLog("Connected Device : " + device.getName());
+//
+//
+//                if(mDbOpenHelper.DbTargetFind(device.getAddress()) != null)
+//                    targetDeviceCount++;
+//
+//                if(targetDeviceMax == targetDeviceCount) {
+//                    targetCheck = true;
+//
+//                    addLog("타겟 조건 결과 : Success");
+//
+//                    targetStateText.setText("Success");
+//                    targetStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
+//                }
 
 
 
@@ -167,12 +206,28 @@ public class LockActivity extends AppCompatActivity {
                 intentAction = ACTION_GATT_DISCONNECTED;
                 Log.i("myTag", "---- Disconnected ----");
 
-                BluetoothDevice device = gatt.getDevice();
-                Log.i("myTag","disconnected Device : " + device.getName());
-
-                addLog("Disconnected Device : " + device.getName());
+                final BluetoothDevice device = gatt.getDevice();
+                Log.i("myTestLog","disconnected Device : " + device.getName());
 
                 unconnectDeviceCount++;
+
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        runOnUiThread(new Runnable(){
+                            @Override
+                            public void run() {
+                                addLog("Disconnected Device : " + device.getName());
+                            }
+                        });
+                    }
+                }).start();
+
+
+            }
+
+            else{
+                Log.i("myTestLog","newState : " + newState);
             }
         }
     };
@@ -184,10 +239,10 @@ public class LockActivity extends AppCompatActivity {
             final String action = intent.getAction();
             if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
 
-                Log.i("myTag","BroadcastReceiver 연결성공" );
+                Log.i("myTestLog"," >>> BroadcastReceiver 연결성공" );
 
             } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)) {
-                Log.i("myTag", "BroadcastReceiver 연결 해제");
+                Log.i("myTestLog", " >>> BroadcastReceiver 연결 해제");
 
             }
         }
@@ -231,6 +286,10 @@ public class LockActivity extends AppCompatActivity {
 
         remianThread.start();
 
+
+
+        totalDeviceSize = mDbOpenHelper.DbMainSelect().size();
+
         String temp = ApplicationController.connectInfo.getString("countNum", "");
         if(temp.equals(""))
             connectDeviceMax = 0;
@@ -240,27 +299,7 @@ public class LockActivity extends AppCompatActivity {
         targetDeviceMax = mDbOpenHelper.DbTarget().size();
 
 
-        /**
-         * 연결된 기기 갯수 파악
-         */
 
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-
-                for(int i = 0 ; i< moduleList.size(); i++){
-
-
-                    connectBle(moduleList.get(i).identNum);
-
-
-
-                }
-
-                Log.i("myTag","count_check : " + countCheck);
-
-            }
-        }).start();
 
 
 
@@ -306,26 +345,89 @@ public class LockActivity extends AppCompatActivity {
 
 
     public Boolean connectBle(String mDeviceAddress){
-        Log.i("myTag", "Connect request address=" + mDeviceAddress);
+
+
+        Log.i("myTestLog"," > counting attempt : " + mDeviceAddress);
 
         final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(mDeviceAddress);
 
-
-        if (device == null) {
-            Log.w("myTag", "Device not found.  Unable to connect.");
+        if (mBluetoothAdapter == null || mDeviceAddress == null) {
+            Log.i("myTestLog", "BluetoothAdapter not initialized or unspecified address.");
             return false;
         }
 
-//        device.connectGatt(this, false, mGattCallback);
-
-
-        if (mBluetoothLeService != null) {
-            final boolean result = mBluetoothLeService.connect(mDeviceAddress);
-            Log.i("myTag", "Connect request result=" + result);
+        if (device == null) {
+            Log.i("myTestLog"," >> Device not found.  Unable to connect.");
+            return false;
         }
+        // We want to directly connect to the device, so we are setting the autoConnect
+        // parameter to false.
+        device.connectGatt(this, false, mGattCallback);
+        Log.i("myTestLog"," >><<");
 
 
-
+//        Log.i("myTestLog"," > counting attempt : " + mDeviceAddress);
+//
+//        final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(mDeviceAddress);
+//
+//
+//        if (device == null) {
+//            Log.i("myTestLog"," >> Device not found.  Unable to connect.");
+//
+//            return false;
+//        }
+//
+////        device.connectGatt(this, false, mGattCallback);
+//
+//
+//        if (mBluetoothLeService != null) {
+//            final boolean result = mBluetoothLeService.connect(mDeviceAddress);
+//            Log.i("myTestLog"," >> Connect request result = " + result);
+//
+////
+////            while(true){
+////                if(result || !result)
+////                    break;
+////            }
+//
+//
+//            if(result){
+//
+//                connectDeviceCount++;
+//
+//                new Thread(new Runnable() {
+//                    @Override
+//                    public void run() {
+//                        runOnUiThread(new Runnable(){
+//                            @Override
+//                            public void run() {
+//                                addLog("Connected Device : " + device.getName());
+//                            }
+//                        });
+//                    }
+//                }).start();
+//
+//                Log.i("myTag","connected Device : " + device.getName());
+//                displayGattServices(mBluetoothLeService.getSupportedGattServices());
+//
+//                if(mDbOpenHelper.DbTargetFind(device.getAddress()) != null)
+//                    targetDeviceCount++;
+//
+//
+//                mBluetoothLeService.close(); // 연결확인 후 바로 닫아준다.
+//            }
+//            else{
+//                unconnectDeviceCount++;
+//            }
+//        }
+//        else{
+//            Log.i("myTag", "mBluetoothLeService null ");
+//            Log.i("myTestLog"," >> mBluetoothLeService null ");
+//
+//        }
+//
+//
+//
         return false;
 
     }
@@ -482,7 +584,6 @@ public class LockActivity extends AppCompatActivity {
             if(isPinCheck && countCheck && targetCheck)
             {
 
-
                 addLog("-------- OPEN --------");
 
                 stateImg.setImageResource(R.drawable.unlock);
@@ -491,9 +592,36 @@ public class LockActivity extends AppCompatActivity {
 
 //            Log.i("myTag", " / " +unconnectDeviceCount+connectDeviceCount  + " / " + connectDeviceMax );
 
-            if(unconnectDeviceCount+connectDeviceCount == connectDeviceMax){
-                if(!countCheck){
 
+
+            if(connectDeviceCount >= connectDeviceMax) {
+
+                if(!countCheck)
+                    addLog("연결 조건 결과 : Success");
+
+                countStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
+                countStateText.setText("Success");
+                countCheck = true;
+            }
+
+            if(targetDeviceMax == targetDeviceCount) {
+
+                if(!targetCheck) {
+                    addLog("타겟 조건 결과 : Success");
+                }
+
+                targetCheck = true;
+                targetStateText.setText("Success");
+                targetStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
+            }
+
+//            Log.i("myTestLog", unconnectDeviceCount + " / " + connectDeviceCount + " / " + totalDeviceSize);
+
+            if(unconnectDeviceCount + connectDeviceCount == totalDeviceSize){
+
+                isRunning = false;
+
+                if(!countCheck){
 
                     addLog("연결 조건 결과 : Fail");
 
@@ -542,5 +670,33 @@ public class LockActivity extends AppCompatActivity {
     }
 
 
+    private void displayGattServices(List<BluetoothGattService> gattServices) {
+
+
+        if (gattServices == null){
+
+            Log.i("myTestLog"," >>> gattServices null ");
+            return;
+        }
+
+        Log.i("myTestLog"," >>> gattServices " + gattServices.size());
+
+        String uuid = null;
+        String unknownServiceString = getResources().getString(R.string.unknown_service);
+        String unknownCharaString = getResources().getString(R.string.unknown_characteristic);
+        ArrayList<HashMap<String, String>> gattServiceData = new ArrayList<HashMap<String, String>>();
+        ArrayList<ArrayList<HashMap<String, String>>> gattCharacteristicData = new ArrayList<ArrayList<HashMap<String, String>>>();
+
+
+        // Loops through available GATT Services.
+        for (BluetoothGattService gattService : gattServices) {
+            HashMap<String, String> currentServiceData = new HashMap<String, String>();
+            uuid = gattService.getUuid().toString();
+
+            Log.i("myTestLog",">>>>>>>>>>>" + uuid);
+        }
+
+
+    }
 
 }

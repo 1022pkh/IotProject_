@@ -65,7 +65,7 @@ public class MainActivity extends AppCompatActivity implements MainView {
     private boolean mScanning;
     private Handler mHandler;
     private BluetoothAdapter mBluetoothAdapter;
-    private static final long SCAN_PERIOD = 10000;
+    private static final long SCAN_PERIOD = 15000;
 
 
 
@@ -151,7 +151,28 @@ public class MainActivity extends AppCompatActivity implements MainView {
 
         setPermission();
 
+        /**
+         * 주변 기기 검색을 통해 페어링 유무를 확인하고....
+         */
         scanLeDevice(true);
+//
+//
+//        new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//
+//                ArrayList<ItemData> tempList = mDbOpenHelper.DbMainSelect();
+//
+//                for(int i = 0; i<tempList.size(); i++){
+//                    BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(tempList.get(i).identNum);
+//
+//                    mAdapter.setOnlineCheck(device);
+//                }
+//
+//            }
+//        }).start();
+
+
 
     }
 
@@ -250,11 +271,16 @@ public class MainActivity extends AppCompatActivity implements MainView {
             mHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
+
+                    if(mScanning)
+                        Toast.makeText(getApplicationContext(),"background scanning timeout",Toast.LENGTH_SHORT).show();
+
                     mScanning = false;
                     mBluetoothAdapter.stopLeScan(mLeScanCallback);
                     invalidateOptionsMenu();
 
                     mAdapter.setOffline();
+
 
                 }
             }, SCAN_PERIOD);
@@ -264,18 +290,6 @@ public class MainActivity extends AppCompatActivity implements MainView {
         } else {
             mScanning = false;
             mBluetoothAdapter.stopLeScan(mLeScanCallback);
-
-
-
-
-            ArrayList<ItemData> tempList = mDbOpenHelper.DbMainSelect();
-
-            for(int i = 0; i<tempList.size(); i++){
-                BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(tempList.get(i).identNum);
-
-                mAdapter.setOnlineCheck(device);
-            }
-
 
         }
         invalidateOptionsMenu();
@@ -292,13 +306,18 @@ public class MainActivity extends AppCompatActivity implements MainView {
                         public void run() {
 
 
+
+
+                            Log.i("myTag", "name : " + String.valueOf(device.getName()) + " / " + String.valueOf(device.getAddress()));
+
+
                             if(mDbOpenHelper.DbFind(device.getAddress()) != null){
 
 
                                 if(device.getBondState() == BluetoothDevice.BOND_BONDED || device.getBondState() == BluetoothDevice.BOND_BONDING) {
                                     mAdapter.setOnline(device.getAddress());
                                 }
-                                else{
+                                else if(device.getBondState() == BluetoothDevice.BOND_NONE){
                                     pairDevice(device);
 
                                     mAdapter.setOnlineCheck(device);
