@@ -43,8 +43,6 @@ import java.util.List;
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
-import static android.bluetooth.BluetoothDevice.BOND_BONDED;
-import static android.bluetooth.BluetoothDevice.BOND_BONDING;
 import static android.bluetooth.BluetoothDevice.EXTRA_DEVICE;
 import static android.util.Log.i;
 
@@ -352,38 +350,45 @@ public class DeviceSearchActivity extends ActionBarActivity {
     }
 
     private void pairDevice(BluetoothDevice device) {
-        try {
-            Log.i("myTag", "Start Pairing... with: " + device.getName());
 
-//            i("myTag", "state : " + device.getBondState());
 
-//            ParcelUuid[] parcelUuid = device.getUuids();
+        Log.i("myTag", "name : " + String.valueOf(device.getName()));
+        Log.i("myTag", "address : " + String.valueOf(device.getAddress()));
+
+        device.createBond();
+
+//        try {
+//            Log.i("myTag", "Start Pairing... with: " + device.getName());
 //
-//            for(int i = 0; i< parcelUuid.length; i++){
-//                Log.i("myTag", "Uuid "+ i +" : " + parcelUuid[i]);
+////            i("myTag", "state : " + device.getBondState());
+//
+////            ParcelUuid[] parcelUuid = device.getUuids();
+////
+////            for(int i = 0; i< parcelUuid.length; i++){
+////                Log.i("myTag", "Uuid "+ i +" : " + parcelUuid[i]);
+////
+////            }
+//
+//            if(device.getBondState() != BOND_BONDED && device.getBondState() != BOND_BONDING){
+//
+//                if(device.createBond()) {
+//                    Log.i("myTag", "Pairing finished.");
+//                }
 //
 //            }
-
-            if(device.getBondState() != BOND_BONDED && device.getBondState() != BOND_BONDING){
-
-                if(device.createBond()) {
-                    Log.i("myTag", "Pairing finished.");
-                }
-
-            }
-            else{
-                Log.i("myTag", "alreadey Pairing " );
-
-            }
-
-
-//            BluetoothClass test = device.();
-//            Log.i("myTag", String.valueOf(test.hashCode()));
-
-
-        } catch (Exception e) {
-            Log.i("myTag", e.getMessage());
-        }
+//            else{
+//                Log.i("myTag", "alreadey Pairing " );
+//
+//            }
+//
+//
+////            BluetoothClass test = device.();
+////            Log.i("myTag", String.valueOf(test.hashCode()));
+//
+//
+//        } catch (Exception e) {
+//            Log.i("myTag", e.getMessage());
+//        }
 
 //        String ACTION_PAIRING_REQUEST = "android.bluetooth.device.action.PAIRING_REQUEST";
 //        Intent intent = new Intent(ACTION_PAIRING_REQUEST);

@@ -1,5 +1,7 @@
 package com.kyounghyun.iotproject.main;
 
+import android.Manifest;
+import android.annotation.TargetApi;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
@@ -7,6 +9,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v7.app.AlertDialog;
@@ -56,6 +59,7 @@ public class MainActivity extends AppCompatActivity implements MainView {
 
     DbOpenHelper mDbOpenHelper;
 
+    public final int REQUESTCODE = 1;
 
 
     private boolean mScanning;
@@ -145,10 +149,9 @@ public class MainActivity extends AppCompatActivity implements MainView {
 //        mLeDeviceListAdapter = new DeviceAdapter(getApplicationContext());
 //        listView.setAdapter(mLeDeviceListAdapter);
 
+        setPermission();
 
         scanLeDevice(true);
-
-
 
     }
 
@@ -170,6 +173,77 @@ public class MainActivity extends AppCompatActivity implements MainView {
     }
 
 
+    /**
+     * android 6.0 permission
+     */
+    @TargetApi(Build.VERSION_CODES.M)
+    public void setPermission(){
+
+        if(Build.VERSION.SDK_INT > Build.VERSION_CODES.LOLLIPOP){
+            int permissionCheck = this.checkSelfPermission("Manifest.permission.BLUETOOTH");
+
+            if (permissionCheck != 0) {
+
+                this.requestPermissions(new String[]{Manifest.permission.BLUETOOTH}, 1001); //Any number
+            }
+
+
+            permissionCheck = this.checkSelfPermission("Manifest.permission.BLUETOOTH_ADMIN");
+
+            if (permissionCheck != 0) {
+
+                this.requestPermissions(new String[]{Manifest.permission.BLUETOOTH_ADMIN}, 1001); //Any number
+            }
+
+
+            permissionCheck = this.checkSelfPermission("Manifest.permission.ACCESS_FINE_LOCATION");
+
+            if (permissionCheck != 0) {
+
+                this.requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1001); //Any number
+            }
+
+            permissionCheck = this.checkSelfPermission("Manifest.permission.ACCESS_COARSE_LOCATION");
+
+            if (permissionCheck != 0) {
+
+                this.requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1001); //Any number
+//                this.requestPermissions(new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN,Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION,}, 1001); //Any number
+            }
+
+
+        }else{
+            Log.i("myTag", "checkBTPermissions: No need to check permissions. SDK version < LOLLIPOP.");
+        }
+
+
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case REQUESTCODE: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+
+                    // permission was granted, yay! Do the
+                    // contacts-related task you need to do.
+
+                } else {
+
+                    // permission denied, boo! Disable the
+                    // functionality that depends on this permission.
+                }
+                return;
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request
+        }
+    }
+
     private void scanLeDevice(final boolean enable) {
         if (enable) {
             // Stops scanning after a pre-defined scan period.
@@ -179,6 +253,9 @@ public class MainActivity extends AppCompatActivity implements MainView {
                     mScanning = false;
                     mBluetoothAdapter.stopLeScan(mLeScanCallback);
                     invalidateOptionsMenu();
+
+                    mAdapter.setOffline();
+
                 }
             }, SCAN_PERIOD);
 
@@ -187,6 +264,19 @@ public class MainActivity extends AppCompatActivity implements MainView {
         } else {
             mScanning = false;
             mBluetoothAdapter.stopLeScan(mLeScanCallback);
+
+
+
+
+            ArrayList<ItemData> tempList = mDbOpenHelper.DbMainSelect();
+
+            for(int i = 0; i<tempList.size(); i++){
+                BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(tempList.get(i).identNum);
+
+                mAdapter.setOnlineCheck(device);
+            }
+
+
         }
         invalidateOptionsMenu();
     }
@@ -205,56 +295,64 @@ public class MainActivity extends AppCompatActivity implements MainView {
                             if(mDbOpenHelper.DbFind(device.getAddress()) != null){
 
 
-                                if(device.getBondState() != BluetoothDevice.BOND_BONDED)
+                                if(device.getBondState() == BluetoothDevice.BOND_BONDED || device.getBondState() == BluetoothDevice.BOND_BONDING) {
+                                    mAdapter.setOnline(device.getAddress());
+                                }
+                                else{
                                     pairDevice(device);
+
+                                    mAdapter.setOnlineCheck(device);
+
 
 //                                Log.i("myTag", "scanRecord : " +  ByteArrayToString(scanRecord));
 //                            Log.i("myTag", "string : " +  device.toString());
 
-                                mAdapter.setOnlineCheck(device);
-
-
-                                String scanHex = bytesToHex(scanRecord);
+                                    String scanHex = bytesToHex(scanRecord);
 //                                Log.i("myTag", "data:" + scanHex);
 
-                                int startByte = 2;
-                                boolean patternFound = true;
-                                while (startByte <= 5) {
-                                    if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 && //Identifies an iBeacon
-                                            ((int) scanRecord[startByte + 3] & 0xff) == 0x15) { //Identifies correct data length
-                                        patternFound = true;
-                                        break;
+                                    int startByte = 2;
+                                    boolean patternFound = true;
+                                    while (startByte <= 5) {
+                                        if (    ((int) scanRecord[startByte + 2] & 0xff) == 0x02 && //Identifies an iBeacon
+                                                ((int) scanRecord[startByte + 3] & 0xff) == 0x15) { //Identifies correct data length
+                                            patternFound = true;
+                                            break;
+                                        }
+                                        startByte++;
                                     }
-                                    startByte++;
-                                }
 
-                                if (patternFound) {
-                                    //Convert to hex String
-                                    byte[] uuidBytes = new byte[16];
-                                    System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
-                                    String hexString = bytesToHex(uuidBytes);
+                                    if (patternFound) {
+                                        //Convert to hex String
+                                        byte[] uuidBytes = new byte[16];
+                                        System.arraycopy(scanRecord, startByte+4, uuidBytes, 0, 16);
+                                        String hexString = bytesToHex(uuidBytes);
 
-                                    //Here is your UUID
-                                    String uuid =  hexString.substring(0,8) + "-" +
-                                            hexString.substring(8,12) + "-" +
-                                            hexString.substring(12,16) + "-" +
-                                            hexString.substring(16,20) + "-" +
-                                            hexString.substring(20,32);
+                                        //Here is your UUID
+                                        String uuid =  hexString.substring(0,8) + "-" +
+                                                hexString.substring(8,12) + "-" +
+                                                hexString.substring(12,16) + "-" +
+                                                hexString.substring(16,20) + "-" +
+                                                hexString.substring(20,32);
 
 //                                    Log.i("myTag", "uuid : " +  uuid);
 
-                                    //Here is your Major value
-                                    int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
+                                        //Here is your Major value
+                                        int major = (scanRecord[startByte+20] & 0xff) * 0x100 + (scanRecord[startByte+21] & 0xff);
 
 //                                    Log.i("myTag", "major : " +  major);
 
-                                    //Here is your Minor value
-                                    int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
+                                        //Here is your Minor value
+                                        int minor = (scanRecord[startByte+22] & 0xff) * 0x100 + (scanRecord[startByte+23] & 0xff);
 
 //                                    Log.i("myTag", "minor : " +  minor);
 
 
+                                    }
                                 }
+
+
+
+
                             }
 
 
@@ -283,54 +381,10 @@ public class MainActivity extends AppCompatActivity implements MainView {
 
     private void pairDevice(BluetoothDevice device) {
 
-
-
-//        try {
-//            Log.i("myTag", "Start Pairing... with: " + device.getName());
-//
-////            i("myTag", "state : " + device.getBondState());
-//
-////            ParcelUuid[] parcelUuid = device.getUuids();
-////
-////            for(int i = 0; i< parcelUuid.length; i++){
-////                Log.i("myTag", "Uuid "+ i +" : " + parcelUuid[i]);
-////
-////            }
-//
-//            if(device.getBondState() != BOND_BONDED && device.getBondState() != BOND_BONDING){
-//
-//                if(device.createBond()) {
-//                    Log.i("myTag", "Pairing finished.");
-//                }
-//
-//            }
-//            else{
-//                Log.i("myTag", "alreadey Pairing " );
-//
-//            }
-//
-//
-////            BluetoothClass test = device.();
-////            Log.i("myTag", String.valueOf(test.hashCode()));
-//
-//
-//        } catch (Exception e) {
-//            Log.i("myTag", e.getMessage());
-//        }
-
-
         Log.i("myTag", "name : " + String.valueOf(device.getName()));
         Log.i("myTag", "address : " + String.valueOf(device.getAddress()));
 
-        String ACTION_PAIRING_REQUEST = "android.bluetooth.device.action.PAIRING_REQUEST";
-        Intent intent = new Intent(ACTION_PAIRING_REQUEST);
-        String EXTRA_DEVICE = "android.bluetooth.device.extra.DEVICE";
-        intent.putExtra(EXTRA_DEVICE, device);
-        String EXTRA_PAIRING_VARIANT = "android.bluetooth.device.extra.PAIRING_VARIANT";
-        int PAIRING_VARIANT_PIN = 0;
-        intent.putExtra(EXTRA_PAIRING_VARIANT, PAIRING_VARIANT_PIN);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
+        device.createBond();
 
     }
 

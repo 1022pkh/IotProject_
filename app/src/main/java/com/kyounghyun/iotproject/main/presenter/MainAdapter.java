@@ -15,6 +15,8 @@ import com.kyounghyun.iotproject.main.view.MainView;
 import java.util.ArrayList;
 
 import static android.bluetooth.BluetoothDevice.BOND_BONDED;
+import static android.bluetooth.BluetoothDevice.BOND_BONDING;
+import static android.bluetooth.BluetoothDevice.BOND_NONE;
 
 /**
  * Created by kyounghyun on 2017. 1. 15..
@@ -51,7 +53,7 @@ public class MainAdapter extends RecyclerView.Adapter<MainViewHolder> {
 
         holder.idText.setText(String.valueOf(position+1));
         holder.nameText.setText(itemDatas.get(position).identName);
-
+        holder.numText.setText(itemDatas.get(position).identNum);
         holder.statusText.setText(itemDatas.get(position).status);
 
 
@@ -76,7 +78,10 @@ public class MainAdapter extends RecyclerView.Adapter<MainViewHolder> {
 
     public void setOnlineCheck(BluetoothDevice device){
 
-        Log.i("myTag", "check");
+        Log.i("myTag", ">>> BOND_BONDED : " + BOND_BONDED );
+        Log.i("myTag", ">>> BOND_BONDING : " + BOND_BONDING );
+        Log.i("myTag", ">>> BOND_NONEa : " + BOND_NONE );
+        Log.i("myTag", ">>> check : " + device.getBondState() );
 
         int index = 0;
         for(int i=0; i<itemDatas.size(); i++){
@@ -91,6 +96,11 @@ public class MainAdapter extends RecyclerView.Adapter<MainViewHolder> {
                 notifyDataSetChanged();
 
         }
+        else if(device.getBondState() == BOND_BONDING)
+        {
+            itemDatas.get(index).status = "online";
+            notifyDataSetChanged();
+        }
         else
         {
             itemDatas.get(index).status = "offline";
@@ -98,6 +108,31 @@ public class MainAdapter extends RecyclerView.Adapter<MainViewHolder> {
 
         }
 
+    }
 
+
+    public void setOnline(String address){
+        int index = 0;
+        for(int i=0; i<itemDatas.size(); i++){
+            if(itemDatas.get(i).identNum.equals(address))
+            {
+                index = i;
+            }
+        }
+
+        itemDatas.get(index).status = "online";
+        notifyDataSetChanged();
+
+    }
+
+    public void setOffline() {
+
+        for (int i = 0; i < itemDatas.size(); i++) {
+            if(itemDatas.get(i).status.equals("checking")){
+                itemDatas.get(i).status = "offline";
+                notifyDataSetChanged();
+            }
+
+        }
     }
 }

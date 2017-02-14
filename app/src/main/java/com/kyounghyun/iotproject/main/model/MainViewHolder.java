@@ -14,6 +14,7 @@ public class MainViewHolder extends RecyclerView.ViewHolder {
 
     public TextView idText;
     public TextView nameText;
+    public TextView numText;
     public TextView statusText;
     public TextView removeBtn;
 
@@ -24,6 +25,7 @@ public class MainViewHolder extends RecyclerView.ViewHolder {
 
         idText = (TextView)itemView.findViewById(R.id.idNum);
         nameText = (TextView)itemView.findViewById(R.id.moduleName);
+        numText = (TextView)itemView.findViewById(R.id.moduleNum);
         statusText = (TextView)itemView.findViewById(R.id.moduleStatus);
         removeBtn = (TextView)itemView.findViewById(R.id.removeBtn);
     }

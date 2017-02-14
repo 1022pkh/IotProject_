@@ -6,9 +6,16 @@ import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
+import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -16,11 +23,13 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.kyounghyun.iotproject.R;
 import com.kyounghyun.iotproject.application.ApplicationController;
+import com.kyounghyun.iotproject.bluetooth.BluetoothLeService;
 import com.kyounghyun.iotproject.database.DbOpenHelper;
 import com.kyounghyun.iotproject.database.ItemData;
 import com.kyounghyun.iotproject.dialog.DialogConparePinNum;
@@ -37,15 +46,21 @@ public class LockActivity extends AppCompatActivity {
     TextView countupText;
     @BindView(R.id.stateImg)
     ImageView stateImg;
-//    @BindView(R.id.openOrder)
-//    TextView openOrder;
-//    @BindView(R.id.closeOrder)
-//    TextView closeOrder;
+    @BindView(R.id.countStateText)
+    TextView countStateText;
+    @BindView(R.id.targetStateText)
+    TextView targetStateText;
+    @BindView(R.id.pinStateText)
+    TextView pinStateText;
+    @BindView(R.id.logArea)
+    LinearLayout logArea;
+
 
     int countUp = 0;
 
     int connectDeviceMax = 0;
     int connectDeviceCount = 0;
+    int unconnectDeviceCount = 0;
 
     int targetDeviceMax = 0;
     int targetDeviceCount = 0;
@@ -62,6 +77,11 @@ public class LockActivity extends AppCompatActivity {
     ArrayList<ItemData> moduleList;
     private BluetoothAdapter mBluetoothAdapter;
 
+    private BluetoothLeService mBluetoothLeService;
+
+
+
+
     private static final int STATE_DISCONNECTED = 0;
     private static final int STATE_CONNECTING = 1;
     private static final int STATE_CONNECTED = 2;
@@ -73,23 +93,102 @@ public class LockActivity extends AppCompatActivity {
     public final static String ACTION_GATT_DISCONNECTED =
             "com.example.bluetooth.le.ACTION_GATT_DISCONNECTED";
 
+
+
+    public final ServiceConnection mServiceConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder service) {
+            mBluetoothLeService = ((BluetoothLeService.LocalBinder) service).getService();
+            if (!mBluetoothLeService.initialize()) {
+//                Log.e(TAG, "Unable to initialize Bluetooth");
+//                finish();
+            }
+            // Automatically connects to the device upon successful start-up initialization.
+//            mBluetoothLeService.connect(mDeviceAddress);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            mBluetoothLeService = null;
+            Log.i("myTag","application onServiceDisconnected");
+        }
+    };
+
+
+
     private final BluetoothGattCallback mGattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             String intentAction;
+
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 intentAction = ACTION_GATT_CONNECTED;
-                Log.i("myTag", "Connected");
+                Log.i("myTag", "---- Connected ----");
+
 
                 connectDeviceCount++;
 
-                if(targetDeviceCount >= connectDeviceMax)
+                if(connectDeviceCount >= connectDeviceMax) {
+                    countStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
+                    countStateText.setText("Success");
                     countCheck = true;
+                }
+
+
+                /**
+                 * 특정 다비아스 연결 확인
+                 */
+
+                BluetoothDevice device = gatt.getDevice();
+                Log.i("myTag","connected Device : " + device.getName());
+
+
+                addLog("Connected Device : " + device.getName());
+
+
+                if(mDbOpenHelper.DbTargetFind(device.getAddress()) != null)
+                    targetDeviceCount++;
+
+                if(targetDeviceMax == targetDeviceCount) {
+                    targetCheck = true;
+
+                    addLog("타겟 조건 결과 : Success");
+
+                    targetStateText.setText("Success");
+                    targetStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
+                }
+
+
+
 
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 intentAction = ACTION_GATT_DISCONNECTED;
-                Log.i("myTag", "Disconnected");
+                Log.i("myTag", "---- Disconnected ----");
+
+                BluetoothDevice device = gatt.getDevice();
+                Log.i("myTag","disconnected Device : " + device.getName());
+
+                addLog("Disconnected Device : " + device.getName());
+
+                unconnectDeviceCount++;
+            }
+        }
+    };
+
+
+    private final BroadcastReceiver mGattUpdateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            final String action = intent.getAction();
+            if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
+
+                Log.i("myTag","BroadcastReceiver 연결성공" );
+
+            } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)) {
+                Log.i("myTag", "BroadcastReceiver 연결 해제");
+
             }
         }
     };
@@ -119,7 +218,7 @@ public class LockActivity extends AppCompatActivity {
                     timer.sendMessage(msg);
 
                     try {
-                        Thread.sleep(1000);
+                        Thread.sleep(10); // 10 = 1
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -132,7 +231,12 @@ public class LockActivity extends AppCompatActivity {
 
         remianThread.start();
 
-        connectDeviceMax = mDbOpenHelper.DbMainSelect().size();
+        String temp = ApplicationController.connectInfo.getString("countNum", "");
+        if(temp.equals(""))
+            connectDeviceMax = 0;
+        else
+            connectDeviceMax = Integer.parseInt(ApplicationController.connectInfo.getString("countNum", ""));
+
         targetDeviceMax = mDbOpenHelper.DbTarget().size();
 
 
@@ -140,23 +244,21 @@ public class LockActivity extends AppCompatActivity {
          * 연결된 기기 갯수 파악
          */
 
-
-
-
         new Thread(new Runnable() {
             @Override
             public void run() {
 
                 for(int i = 0 ; i< moduleList.size(); i++){
+
+
                     connectBle(moduleList.get(i).identNum);
+
+
+
                 }
 
-                if(targetDeviceMax ==  targetDeviceCount)
-                    targetCheck = true;
-
-
-
                 Log.i("myTag","count_check : " + countCheck);
+
             }
         }).start();
 
@@ -166,30 +268,18 @@ public class LockActivity extends AppCompatActivity {
          * 타겟 기기 유무 조사
          */
         if(ApplicationController.connectInfo.getBoolean("target_check", false)) {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-
-                    for(int i = 0 ; i< moduleList.size(); i++){
-                        BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(moduleList.get(i).identNum);
-
-                        if(device.getBondState() == BluetoothDevice.BOND_BONDED){
-                            targetDeviceCount++;
-                        }
-
-                    }
-
-                    if(targetDeviceMax ==  targetDeviceCount)
-                        targetCheck = true;
 
 
-
-                    Log.i("myTag","target_check : " + targetCheck);
-                }
-            }).start();
         }
-        else
+        else {
+
+            addLog("특정 조건 결과 : Success");
+
             targetCheck = true;
+
+            targetStateText.setText("Success");
+            targetStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
+        }
 
 
         /**
@@ -201,7 +291,11 @@ public class LockActivity extends AppCompatActivity {
 
         }
         else{
+            addLog("핀 조건 결과 : Success");
+
             isPinCheck = true;
+            pinStateText.setText("Success");
+            pinStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
             Log.i("myTag","pin_check : " + isPinCheck);
 
         }
@@ -216,12 +310,20 @@ public class LockActivity extends AppCompatActivity {
 
         final BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(mDeviceAddress);
 
+
         if (device == null) {
             Log.w("myTag", "Device not found.  Unable to connect.");
             return false;
         }
 
-        device.connectGatt(this, false, mGattCallback);
+//        device.connectGatt(this, false, mGattCallback);
+
+
+        if (mBluetoothLeService != null) {
+            final boolean result = mBluetoothLeService.connect(mDeviceAddress);
+            Log.i("myTag", "Connect request result=" + result);
+        }
+
 
 
         return false;
@@ -233,33 +335,31 @@ public class LockActivity extends AppCompatActivity {
         super.onResume();
 
 
+        /**
+         * BLE 서비스를 등록
+         */
+        Intent gattServiceIntent = new Intent(getApplicationContext(), BluetoothLeService.class);
+        bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
+        registerReceiver(mGattUpdateReceiver, makeGattUpdateIntentFilter());
+
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+
+
+        unregisterReceiver(mGattUpdateReceiver);
+
     }
 
-//    @OnClick(R.id.openOrder)
-//    public void requestOpenOrder(){
-//
-//        stateImg.setImageResource(R.drawable.unlock);
-//        openOrder.setBackgroundResource(R.drawable.border_circle_background);
-//        openOrder.setTextColor(Color.parseColor("#ffffff"));
-//        closeOrder.setBackgroundResource(R.drawable.border_circle_background_empty);
-//        closeOrder.setTextColor(Color.parseColor("#000000"));
-//    }
-//
-//    @OnClick(R.id.closeOrder)
-//    public void requestCloseOrder(){
-//
-//        stateImg.setImageResource(R.drawable.lock);
-//        closeOrder.setBackgroundResource(R.drawable.border_circle_background);
-//        closeOrder.setTextColor(Color.parseColor("#ffffff"));
-//        openOrder.setBackgroundResource(R.drawable.border_circle_background_empty);
-//        openOrder.setTextColor(Color.parseColor("#000000"));
-//    }
+    public void addLog(String text){
+        TextView addLogText = new TextView(this);
+        addLogText.setText(text);
+        addLogText.setTextSize(12);
 
+        logArea.addView(addLogText);
+    }
 
     public void showInputPinDialog(){
         WindowManager.LayoutParams loginParams;
@@ -295,9 +395,14 @@ public class LockActivity extends AppCompatActivity {
 
                 if(temp.equals(num)){
                     isPinCheck = true;
-                    Toast.makeText(getApplicationContext(),"인증 성공!",Toast.LENGTH_SHORT).show();
+
+                    pinStateText.setText("Success");
+                    pinStateText.setTextColor(Color.parseColor("#2D7BD7"));//#E1092E
+
+                    Toast.makeText(getApplicationContext(),"Pin 인증 성공!",Toast.LENGTH_SHORT).show();
 
 
+                    addLog("핀 조건 결과 : Success");
 
                     Log.i("myTag","pin_check : " + isPinCheck);
 
@@ -305,8 +410,13 @@ public class LockActivity extends AppCompatActivity {
                 }
                 else{
                     isPinCheck = false;
-                    Toast.makeText(getApplicationContext(),"인증 실패!",Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getApplicationContext(),"pin 인증 실패!",Toast.LENGTH_SHORT).show();
 
+                    pinStateText.setText("Fail");
+                    pinStateText.setTextColor(Color.parseColor("#E1092E"));//#E1092E
+
+
+                    addLog("핀 조건 결과 : Fail");
 
                     Log.i("myTag","pin_check : " + isPinCheck);
 
@@ -345,25 +455,59 @@ public class LockActivity extends AppCompatActivity {
             countUp++;
             String temp = "";
 
-            if(countUp / 60 < 10 )
-                temp = "0" + countUp / 60 + ":";
+            if((countUp/100) / 60 < 10 )
+                temp = "0" + (countUp/100) / 60 + "m ";
             else
-                temp = countUp / 60 + ":";
+                temp = (countUp/100) / 60 + "m ";
 
 
-            if(countUp % 60 < 10 )
-                temp = temp + "0" + countUp % 60;
+            if((countUp/100) % 60 < 10 )
+                temp = temp + "0" + (countUp/100) % 60 + "s ";
             else
-                temp = temp + countUp % 60;
+                temp = temp + (countUp/100) % 60 + "s ";
+
+
+            if(countUp % 100 < 10 )
+                temp = temp + "0" + countUp % 100 + "ms ";
+            else
+                temp = temp + countUp % 100 + "ms ";
+
 
 
             countupText.setText(temp);
 
 
+//            Log.i("myTag", countCheck + " / " +isPinCheck  + " / " + targetCheck );
+
             if(isPinCheck && countCheck && targetCheck)
             {
+
+
+                addLog("-------- OPEN --------");
+
                 stateImg.setImageResource(R.drawable.unlock);
                 isRunning = false;
+            }
+
+//            Log.i("myTag", " / " +unconnectDeviceCount+connectDeviceCount  + " / " + connectDeviceMax );
+
+            if(unconnectDeviceCount+connectDeviceCount == connectDeviceMax){
+                if(!countCheck){
+
+
+                    addLog("연결 조건 결과 : Fail");
+
+                    countStateText.setText("Fail");
+                    countStateText.setTextColor(Color.parseColor("#E1092E"));//#E1092E
+                }
+
+                if(!targetCheck){
+
+                    addLog("타켓 조건 결과 : Fail");
+
+                    targetStateText.setText("Fail");
+                    targetStateText.setTextColor(Color.parseColor("#E1092E"));//#E1092E
+                }
             }
 
 
@@ -371,6 +515,32 @@ public class LockActivity extends AppCompatActivity {
 
 
     }
+
+    private static IntentFilter makeGattUpdateIntentFilter() {
+        final IntentFilter intentFilter = new IntentFilter();
+
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTING);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED_CAROUSEL);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED_OTA);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECT_OTA);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED_OTA);
+        intentFilter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICE_DISCOVERY_UNSUCCESSFUL);
+        intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
+        intentFilter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_CHARACTERISTIC_ERROR);
+        intentFilter.addAction(BluetoothLeService.ACTION_WRITE_SUCCESS);
+        intentFilter.addAction(BluetoothLeService.ACTION_WRITE_FAILED);
+        intentFilter.addAction(BluetoothLeService.ACTION_PAIR_REQUEST);
+        intentFilter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+        intentFilter.addAction(BluetoothDevice.EXTRA_BOND_STATE);
+        intentFilter.addAction(BluetoothLeService.ACTION_WRITE_COMPLETED);
+        return intentFilter;
+    }
+
 
 
 }
