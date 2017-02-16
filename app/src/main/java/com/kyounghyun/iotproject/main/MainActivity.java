@@ -19,6 +19,7 @@ import android.support.v7.widget.RecyclerView;
 import android.util.Log;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.kyounghyun.iotproject.R;
@@ -51,6 +52,8 @@ public class MainActivity extends AppCompatActivity implements MainView {
     LinearLayout conditionRegisterArea;
     @BindView(R.id.unlockArea)
     LinearLayout unlockArea;
+    @BindView(R.id.reScanBtn)
+    TextView reScanBtn;
 
 
     LinearLayoutManager mLayoutManager;
@@ -155,6 +158,15 @@ public class MainActivity extends AppCompatActivity implements MainView {
          * 주변 기기 검색을 통해 페어링 유무를 확인하고....
          */
         scanLeDevice(true);
+
+
+        reScanBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                scanLeDevice(true);
+                reScanBtn.setVisibility(View.INVISIBLE);
+            }
+        });
 //
 //
 //        new Thread(new Runnable() {
@@ -280,6 +292,7 @@ public class MainActivity extends AppCompatActivity implements MainView {
                     invalidateOptionsMenu();
 
                     mAdapter.setOffline();
+                    reScanBtn.setVisibility(View.VISIBLE);
 
 
                 }
